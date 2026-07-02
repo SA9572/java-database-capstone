@@ -13,7 +13,7 @@ Import the overlay function for booking appointments from loggedPatient.js
     Create and set the doctor's specialization
     Create and set the doctor's email
     Create and list available appointment times
-    Append all info elements to the doctor info container
+   Append all info elements to the doctor info container
     Create a container for card action buttons
     === ADMIN ROLE ACTIONS ===
       Create a delete button
