@@ -1,46 +1,29 @@
-// prescriptionServices.js
-import { API_BASE_URL } from '../config/config.js'
+const API_BASE_URL = '/api/prescriptions';
 
-const PRESCRITION_API = API_BASE_URL + "/prescription"
-export async function savePrescription(prescription, token) {
-  try {
-    const response = await fetch(`${PRESCRITION_API}/${token}`, {
-      method: "POST",
-      headers: {
-        "Content-type": "application/json"
-      },
-      body: JSON.stringify(prescription)
-    });
-    const result = await response.json();
-    return { success: response.ok, message: result.message }
-  }
-  catch (error) {
-    console.error("Error :: savePrescription :: ", error)
-    return { success: false, message: result.message }
-  }
+// Fetch prescriptions tied to a specific appointment
+export async function getPrescriptionByAppointment(appointmentId, token) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/${appointmentId}/${token}`);
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('getPrescriptionByAppointment error:', error);
+        return { prescriptions: [] };
+    }
 }
 
-export async function getPrescription(appointmentId, token) {
-  try {
-    const response = await fetch(`${PRESCRITION_API}/${appointmentId}/${token}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Failed to fetch prescription:", errorData);
-      throw new Error(errorData.message || "Unable to fetch prescription");
+// Save a new prescription (doctor only)
+export async function savePrescription(prescription, token) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/${token}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(prescription)
+        });
+        const data = await response.json();
+        return { success: response.ok, message: data.message };
+    } catch (error) {
+        console.error('savePrescription error:', error);
+        return { success: false, message: 'Error saving prescription.' };
     }
-
-    const result = await response.json();
-    console.log(result)
-    console.log(result)
-    return result; // This should be your prescription object
-  } catch (error) {
-    console.error("Error :: getPrescription ::", error);
-    throw error;
-  }
 }

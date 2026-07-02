@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,18 +27,22 @@ public class PatientService {
     private final PatientRepository patientRepository;
     private final AppointmentRepository appointmentRepository;
     private final TokenService tokenService;
+    private final PasswordEncoder passwordEncoder;
 
     public PatientService(PatientRepository patientRepository,
                            AppointmentRepository appointmentRepository,
-                           TokenService tokenService) {
+                           TokenService tokenService,
+                           PasswordEncoder passwordEncoder) {
         this.patientRepository = patientRepository;
         this.appointmentRepository = appointmentRepository;
         this.tokenService = tokenService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     // Create a new patient. Returns 1 = success, 0 = failure
     public int createPatient(Patient patient) {
         try {
+            patient.setPassword(passwordEncoder.encode(patient.getPassword()));
             patientRepository.save(patient);
             return 1;
         } catch (Exception e) {
@@ -46,7 +51,6 @@ public class PatientService {
         }
     }
 
-    // Get all appointments for a patient, verified against their token
     @Transactional
     public ResponseEntity<Map<String, Object>> getPatientAppointment(Long id, String token) {
         Map<String, Object> response = new HashMap<>();
@@ -71,7 +75,6 @@ public class PatientService {
         }
     }
 
-    // Filter a patient's appointments by "past" or "future"
     public ResponseEntity<Map<String, Object>> filterByCondition(String condition, Long id) {
         Map<String, Object> response = new HashMap<>();
         try {
@@ -98,7 +101,6 @@ public class PatientService {
         }
     }
 
-    // Filter a patient's appointments by doctor name
     public ResponseEntity<Map<String, Object>> filterByDoctor(String doctorName, Long patientId) {
         Map<String, Object> response = new HashMap<>();
         try {
@@ -115,7 +117,6 @@ public class PatientService {
         }
     }
 
-    // Filter a patient's appointments by doctor name AND condition (past/future)
     public ResponseEntity<Map<String, Object>> filterByDoctorAndCondition(String doctorName, String condition, Long patientId) {
         Map<String, Object> response = new HashMap<>();
         try {
@@ -142,7 +143,6 @@ public class PatientService {
         }
     }
 
-    // Fetch the logged-in patient's own details from their token
     public ResponseEntity<Map<String, Object>> getPatientDetails(String token) {
         Map<String, Object> response = new HashMap<>();
         try {
@@ -163,7 +163,6 @@ public class PatientService {
         }
     }
 
-    // Converts an Appointment entity into an AppointmentDTO
     private AppointmentDTO toDTO(Appointment appointment) {
         return new AppointmentDTO(
                 appointment.getId(),

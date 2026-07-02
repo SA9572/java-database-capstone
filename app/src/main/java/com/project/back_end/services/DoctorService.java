@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.project.back_end.models.Doctor;
@@ -24,7 +25,9 @@ public class DoctorService {
     @Autowired
     private TokenService tokenService;
 
-    // Return all doctors
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     public List<Doctor> getDoctors() {
         return doctorRepository.findAll();
     }
@@ -35,6 +38,7 @@ public class DoctorService {
             if (doctorRepository.findByEmail(doctor.getEmail()) != null) {
                 return -1;
             }
+            doctor.setPassword(passwordEncoder.encode(doctor.getPassword()));
             doctorRepository.save(doctor);
             return 1;
         } catch (Exception e) {
@@ -48,6 +52,17 @@ public class DoctorService {
             if (!doctorRepository.existsById(doctor.getId())) {
                 return -1;
             }
+
+            // Re-hash only if a new plain-text password was actually sent;
+            // otherwise keep the existing hash untouched.
+            Doctor existing = doctorRepository.findById(doctor.getId()).orElse(null);
+            if (doctor.getPassword() != null && !doctor.getPassword().isBlank()
+                    && (existing == null || !passwordEncoder.matches(doctor.getPassword(), existing.getPassword()))) {
+                doctor.setPassword(passwordEncoder.encode(doctor.getPassword()));
+            } else if (existing != null) {
+                doctor.setPassword(existing.getPassword());
+            }
+
             doctorRepository.save(doctor);
             return 1;
         } catch (Exception e) {
@@ -55,7 +70,6 @@ public class DoctorService {
         }
     }
 
-    // Delete a doctor by id. Returns 1 = success, -1 = not found, 0 = internal error
     public int deleteDoctor(Long id) {
         try {
             if (!doctorRepository.existsById(id)) {
@@ -69,22 +83,18 @@ public class DoctorService {
         }
     }
 
-    // Filter by name only
     public List<Doctor> filterByName(String name) {
         return doctorRepository.findByNameContainingIgnoreCase(name);
     }
 
-    // Filter by specialty only
     public List<Doctor> filterBySpecialty(String specialty) {
         return doctorRepository.findBySpecialtyIgnoreCase(specialty);
     }
 
-    // Filter by name + specialty
     public List<Doctor> filterByNameAndSpecialty(String name, String specialty) {
         return doctorRepository.findByNameContainingIgnoreCaseAndSpecialtyIgnoreCase(name, specialty);
     }
 
-    // Combines name / time (AM-PM) / specialty filters — called by the admin dashboard filter bar
     public List<Doctor> filterDoctors(String name, String time, String specialty) {
         List<Doctor> doctors;
 
@@ -105,7 +115,6 @@ public class DoctorService {
         return doctors;
     }
 
-    // Filters an in-memory list of doctors by AM/PM availability
     private List<Doctor> filterDoctorsByTime(List<Doctor> doctors, String amOrPm) {
         List<Doctor> result = new ArrayList<>();
         for (Doctor doctor : doctors) {
@@ -125,7 +134,6 @@ public class DoctorService {
         return result;
     }
 
-    // Checks if the doctor is available at the given time on the given date (used before booking)
     public boolean isDoctorAvailable(Long doctorId, LocalDateTime requestedTime) {
         LocalDateTime dayStart = requestedTime.toLocalDate().atStartOfDay();
         LocalDateTime dayEnd = dayStart.plusDays(1);
@@ -139,7 +147,7 @@ public class DoctorService {
     // Doctor login: validates credentials and returns a JWT, or null if invalid
     public String validateLogin(String email, String rawPassword) {
         Doctor doctor = doctorRepository.findByEmail(email);
-        if (doctor == null || !doctor.getPassword().equals(rawPassword)) {
+        if (doctor == null || !passwordEncoder.matches(rawPassword, doctor.getPassword())) {
             return null;
         }
         return tokenService.generateToken(doctor.getEmail());

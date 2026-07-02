@@ -1,54 +1,120 @@
-/*
-  Import getAllAppointments to fetch appointments from the backend
-  Import createPatientRow to generate a table row for each patient appointment
+import { getConfirmedPatientAppointments, filterPatientAppointments } from './services/patientServices.js';
+import { getPrescriptionByAppointment } from './services/prescriptionServices.js';
+import { openModal, closeModal } from './components/modals.js';
 
+let selectedDate = new Date().toISOString().split('T')[0]; // today, yyyy-mm-dd
 
-  Get the table body where patient rows will be added
-  Initialize selectedDate with today's date in 'YYYY-MM-DD' format
-  Get the saved token from localStorage (used for authenticated API calls)
-  Initialize patientName to null (used for filtering by name)
+document.addEventListener('DOMContentLoaded', () => {
+    const filterDateInput = document.getElementById('filterDate');
+    filterDateInput.value = selectedDate;
 
+    loadAppointments();
 
-  Add an 'input' event listener to the search bar
-  On each keystroke:
-    - Trim and check the input value
-    - If not empty, use it as the patientName for filtering
-    - Else, reset patientName to "null" (as expected by backend)
-    - Reload the appointments list with the updated filter
+    document.getElementById('searchBar').addEventListener('input', handleFilterChange);
 
+    filterDateInput.addEventListener('change', (e) => {
+        selectedDate = e.target.value;
+        handleFilterChange();
+    });
 
-  Add a click listener to the "Today" button
-  When clicked:
-    - Set selectedDate to today's date
-    - Update the date picker UI to match
-    - Reload the appointments for today
+    document.getElementById('todayBtn').addEventListener('click', () => {
+        selectedDate = new Date().toISOString().split('T')[0];
+        filterDateInput.value = selectedDate;
+        handleFilterChange();
+    });
 
+    document.getElementById('closeModal').addEventListener('click', closeModal);
+});
 
-  Add a change event listener to the date picker
-  When the date changes:
-    - Update selectedDate with the new value
-    - Reload the appointments for that specific date
+async function loadAppointments() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        window.location.href = '/';
+        return;
+    }
 
+    try {
+        const appointments = await getConfirmedPatientAppointments(selectedDate, token);
+        renderAppointments(appointments);
+    } catch (error) {
+        console.error('Failed to load appointments:', error);
+        showError('Unable to load appointments right now.');
+    }
+}
 
-  Function: loadAppointments
-  Purpose: Fetch and display appointments based on selected date and optional patient name
+async function handleFilterChange() {
+    const name = document.getElementById('searchBar').value.trim() || null;
+    const token = localStorage.getItem('token');
 
-  Step 1: Call getAllAppointments with selectedDate, patientName, and token
-  Step 2: Clear the table body content before rendering new rows
+    try {
+        const appointments = await filterPatientAppointments(name, selectedDate, token);
+        renderAppointments(appointments);
+    } catch (error) {
+        console.error('Filter failed:', error);
+        showError('Something went wrong while filtering appointments.');
+    }
+}
 
-  Step 3: If no appointments are returned:
-    - Display a message row: "No Appointments found for today."
+function renderAppointments(appointments) {
+    const tableBody = document.getElementById('patientTableBody');
+    const noResultsMsg = document.getElementById('noAppointmentsMsg');
+    tableBody.innerHTML = '';
 
-  Step 4: If appointments exist:
-    - Loop through each appointment and construct a 'patient' object with id, name, phone, and email
-    - Call createPatientRow to generate a table row for the appointment
-    - Append each row to the table body
+    if (!appointments || appointments.length === 0) {
+        noResultsMsg.classList.remove('hidden');
+        return;
+    }
+    noResultsMsg.classList.add('hidden');
 
-  Step 5: Catch and handle any errors during fetch:
-    - Show a message row: "Error loading appointments. Try again later."
+    appointments.forEach(appt => {
+        const row = document.createElement('tr');
 
+        const dateStr = appt.appointmentDate || appt.appointmentTime?.split('T')[0];
+        const timeStr = appt.appointmentTimeOnly || appt.appointmentTime?.split('T')[1];
 
-  When the page is fully loaded (DOMContentLoaded):
-    - Call renderContent() (assumes it sets up the UI layout)
-    - Call loadAppointments() to display today's appointments by default
-*/
+        row.innerHTML = `
+            <td>${appt.patientName}</td>
+            <td>${dateStr}</td>
+            <td>${timeStr}</td>
+            <td>${appt.status === 0 ? 'Scheduled' : 'Completed'}</td>
+            <td><button class="viewPrescriptionsBtn adminBtn">View</button></td>
+        `;
+
+        row.querySelector('.viewPrescriptionsBtn').addEventListener('click', () => {
+            viewPrescriptions(appt.id);
+        });
+
+        tableBody.appendChild(row);
+    });
+}
+
+async function viewPrescriptions(appointmentId) {
+    const token = localStorage.getItem('token');
+    try {
+        const result = await getPrescriptionByAppointment(appointmentId, token);
+        const modalBody = document.getElementById('modal-body');
+
+        if (!result.prescriptions || result.prescriptions.length === 0) {
+            modalBody.innerHTML = `<h2>Prescriptions</h2><p>No prescriptions found for this appointment.</p>`;
+        } else {
+            const items = result.prescriptions.map(p => `
+                <div class="prescription-item">
+                    <p><strong>Medication:</strong> ${p.medication}</p>
+                    <p><strong>Dosage:</strong> ${p.dosage}</p>
+                    <p><strong>Notes:</strong> ${p.doctorNotes || 'None'}</p>
+                </div>
+            `).join('');
+            modalBody.innerHTML = `<h2>Prescriptions</h2>${items}`;
+        }
+
+        document.getElementById('modal').classList.remove('hidden');
+    } catch (error) {
+        console.error('Failed to load prescriptions:', error);
+        alert('Unable to load prescriptions right now.');
+    }
+}
+
+function showError(message) {
+    const tableBody = document.getElementById('patientTableBody');
+    tableBody.innerHTML = `<tr><td colspan="5" class="error-message">${message}</td></tr>`;
+}
